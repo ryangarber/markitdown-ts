@@ -1,58 +1,61 @@
-import { decodeText } from "../bytes";
-import { CustomTurnDown } from "../custom-turndown";
-import { parseHtmlDocument } from "../html-document";
-import type { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
+import type { Converter, ConverterOptions, ConverterResult } from "../types.ts";
+import { decodeText, parseHtmlDocument } from "../utils/index.ts";
 
 const BING_SEARCH_URL = /^https:\/\/www\.bing\.com\/search\?q=/i;
 const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-export class BingSerpConverter implements DocumentConverter {
+export class BingSerpConverter implements Converter {
   async convert(source: Uint8Array, options: ConverterOptions = {}): Promise<ConverterResult> {
-    const extension = options.file_extension?.toLowerCase() ?? "";
-    const url = options.url ?? "";
-    if ((extension !== ".html" && extension !== ".htm") || !BING_SEARCH_URL.test(url)) {
+    if (
+      (options.extension !== "html" && options.extension !== "htm") ||
+      !BING_SEARCH_URL.test(options.url ?? "")
+    ) {
       return null;
     }
 
-    const document = parseHtmlDocument(decodeText(source));
-    const query = new URL(url).searchParams.get("q") ?? "";
+    let query = new URL(options.url ?? "").searchParams.get("q") || null;
+    if (query) query = `Search results for "${query}"`;
 
-    document.querySelectorAll(".tptt").forEach((element) => {
-      if (element.textContent) {
-        element.textContent += " ";
-      }
-    });
-    document.querySelectorAll(".algoSlug_icon").forEach((element) => {
-      element.remove();
-    });
-
-    const turndown = new CustomTurnDown();
-    const results = [...document.querySelectorAll(".b_algo")].map((result) => {
-      result.querySelectorAll("a[href]").forEach((anchor) => {
-        const href = anchor.getAttribute("href");
-        if (!href) {
-          return;
-        }
-        try {
-          const encoded = new URL(href, url).searchParams.get("u");
-          if (encoded) {
-            anchor.setAttribute("href", decodeBingUrl(encoded));
-          }
-        } catch {
-          // Preserve malformed links as they appeared in the source document.
+    return parseHtmlDocument(decodeText(source), (document) => {
+      document.querySelectorAll(".tptt").forEach((element) => {
+        if (element.textContent) {
+          element.textContent += " ";
         }
       });
 
-      return turndown
-        .convertSoup(result)
-        .split(/\n+/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .join("\n");
-    });
+      document.querySelectorAll(".algoSlug_icon").forEach((element) => {
+        element.remove();
+      });
 
-    const markdown = `## A Bing search for '${query}' found the following results:\n\n${results.join("\n\n")}`;
-    return { title: document.title || null, markdown, text_content: markdown };
+      return {
+        title: {
+          type: "metadata",
+          value: query || document.title || null
+        },
+        markdown: {
+          type: "node",
+          value: [...document.querySelectorAll(".b_algo")].map((result) => {
+            result.querySelectorAll("a[href]").forEach((anchor) => {
+              const href = anchor.getAttribute("href");
+              if (!href) {
+                return;
+              }
+
+              try {
+                const encoded = new URL(href, options.url ?? "").searchParams.get("u");
+                if (encoded) {
+                  anchor.setAttribute("href", decodeBingUrl(encoded));
+                }
+              } catch {
+                // Preserve malformed links as they appeared in the source document.
+              }
+            });
+
+            return result;
+          })
+        }
+      };
+    });
   }
 }
 

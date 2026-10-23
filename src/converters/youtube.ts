@@ -1,76 +1,82 @@
-import { decodeText } from "../bytes";
-import { parseHtmlDocument } from "../html-document";
-import type { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
+import type { Converter, ConverterOptions, ConverterResult } from "../types.ts";
+import { decodeText, parseHtmlDocument } from "../utils/index.ts";
 
-export class YouTubeConverter implements DocumentConverter {
+const YOUTUBE_URL =
+  /^https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\/(?:watch\?v=|shorts\/)?([a-zA-Z0-9_-]+)/i;
+
+export class YouTubeConverter implements Converter {
   async convert(source: Uint8Array, options: ConverterOptions = {}): Promise<ConverterResult> {
-    const extension = options.file_extension?.toLowerCase() ?? "";
     if (
-      (extension !== ".html" && extension !== ".htm") ||
-      !options.url?.startsWith("https://www.youtube.com/watch?")
+      (options.extension !== "html" && options.extension !== "htm") ||
+      !YOUTUBE_URL.test(options.url ?? "")
     ) {
       return null;
     }
 
-    const document = parseHtmlDocument(decodeText(source));
-    const metadata: Record<string, string> = { title: document.title };
+    return parseHtmlDocument(decodeText(source), (document) => {
+      const metadata: Record<string, string> = {};
 
-    document.querySelectorAll("meta").forEach((meta) => {
-      const content = meta.getAttribute("content");
-      const key =
-        meta.getAttribute("itemprop") ?? meta.getAttribute("property") ?? meta.getAttribute("name");
-      if (key && content) {
-        metadata[key] = content;
-      }
-    });
-
-    try {
-      for (const script of document.querySelectorAll("script")) {
-        const content = script.textContent ?? "";
-        if (!content.includes("ytInitialData")) {
-          continue;
+      document.querySelectorAll("meta").forEach((meta) => {
+        const content = meta.getAttribute("content");
+        const key =
+          meta.getAttribute("itemprop") ??
+          meta.getAttribute("property") ??
+          meta.getAttribute("name");
+        if (key && content) {
+          metadata[key] = content;
         }
-        const start = content.indexOf("{");
-        const end = content.lastIndexOf("}");
-        if (start >= 0 && end > start) {
-          const description = findKey(
-            JSON.parse(content.slice(start, end + 1)),
-            "attributedDescriptionBodyText"
-          );
-          if (isRecord(description) && typeof description.content === "string") {
-            metadata.description = description.content;
+      });
+
+      try {
+        for (const script of document.querySelectorAll("script")) {
+          const content = script.textContent ?? "";
+          if (!content.includes("ytInitialData")) {
+            continue;
           }
+          const start = content.indexOf("{");
+          const end = content.lastIndexOf("}");
+          if (start >= 0 && end > start) {
+            const description = findKey(
+              JSON.parse(content.slice(start, end + 1)),
+              "attributedDescriptionBodyText"
+            );
+            if (isRecord(description) && typeof description.content === "string") {
+              metadata.description = description.content;
+            }
+          }
+          break;
         }
-        break;
+      } catch {
+        // Meta description remains available when the page implementation changes.
       }
-    } catch {
-      // Meta description remains available when the page implementation changes.
-    }
 
-    const title = first(metadata, ["title", "og:title", "name"]) || document.title || null;
-    const lines = ["# YouTube"];
-    if (title) {
-      lines.push(`## ${title}`);
-    }
+      const title = first(metadata, ["title", "og:title", "name"]) || document.title || null;
+      const lines = ["# YouTube"];
+      if (title) {
+        lines.push(`## ${title}`);
+      }
 
-    const stats: string[] = [];
-    const views = first(metadata, ["interactionCount"]);
-    const keywords = first(metadata, ["keywords"]);
-    const runtime = first(metadata, ["duration"]);
-    if (views) stats.push(`- **Views:** ${views}`);
-    if (keywords) stats.push(`- **Keywords:** ${keywords}`);
-    if (runtime) stats.push(`- **Runtime:** ${runtime}`);
-    if (stats.length > 0) {
-      lines.push(`### Video Metadata\n${stats.join("\n")}`);
-    }
+      const stats: string[] = [];
+      const views = first(metadata, ["interactionCount"]);
+      const keywords = first(metadata, ["keywords"]);
+      const runtime = first(metadata, ["duration"]);
+      if (views) stats.push(`- **Views:** ${views}`);
+      if (keywords) stats.push(`- **Keywords:** ${keywords}`);
+      if (runtime) stats.push(`- **Runtime:** ${runtime}`);
+      if (stats.length > 0) {
+        lines.push(`### Video Metadata\n\n${stats.join("\n")}`);
+      }
 
-    const description = first(metadata, ["description", "og:description"]);
-    if (description) {
-      lines.push(`### Description\n${description}`);
-    }
+      const description = first(metadata, ["description", "og:description"]);
+      if (description) {
+        lines.push(`### Description\n\n${description}`);
+      }
 
-    const markdown = lines.join("\n\n");
-    return { title, markdown, text_content: markdown };
+      return {
+        title: { type: "metadata", value: title },
+        markdown: { type: "metadata", value: lines.join("\n\n") }
+      };
+    });
   }
 }
 

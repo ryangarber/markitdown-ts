@@ -1,14 +1,13 @@
-import { decodeText } from "../bytes";
-import { isTextExtension } from "../mime";
-import type { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
+import type { Converter, ConverterOptions, ConverterResult } from "../types.ts";
+import { decodeText, isTextExtension } from "../utils/index.ts";
 
-export class PlainTextConverter implements DocumentConverter {
+export class PlainTextConverter implements Converter {
   async convert(source: Uint8Array, options: ConverterOptions = {}): Promise<ConverterResult> {
-    if (!isTextExtension(options.file_extension ?? "")) {
+    if (!isTextExtension(options.extension ?? "")) {
       return null;
     }
 
     const content = decodeText(source);
-    return { title: null, markdown: content, text_content: content };
+    return { title: null, markdown: content };
   }
 }

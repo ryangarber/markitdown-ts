@@ -1,17 +1,15 @@
 import { unzipSync } from "fflate";
-import { extensionFromPathname } from "../mime";
-import type { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
+import type { Converter, ConverterOptions, ConverterResult } from "../types.ts";
+import { extensionFromPathname } from "../utils/index.ts";
 
-export class ZipConverter implements DocumentConverter {
+export class ZipConverter implements Converter {
   async convert(source: Uint8Array, options: ConverterOptions = {}): Promise<ConverterResult> {
-    if (options.file_extension?.toLowerCase() !== ".zip") {
+    if (options.extension !== "zip") {
       return null;
     }
 
-    const files = unzipSync(source, {
-      filter: (file) => !file.name.endsWith("/")
-    });
-    const converters = options._parent_converters ?? [];
+    const files = unzipSync(source, { filter: (file) => !file.name.endsWith("/") });
+    const converters = options._converters ?? [];
     const zipName = options.url ?? "archive.zip";
     const sections = [`Content from the zip file \`${zipName}\`:`];
 
@@ -23,14 +21,14 @@ export class ZipConverter implements DocumentConverter {
     }
 
     const markdown = sections.join("\n\n");
-    return { title: null, markdown, text_content: markdown };
+    return { title: null, markdown };
   }
 }
 
 async function convertEntry(
   source: Uint8Array,
   name: string,
-  converters: DocumentConverter[],
+  converters: Converter[],
   options: ConverterOptions
 ): Promise<ConverterResult> {
   const extension = extensionFromPathname(name);
@@ -40,9 +38,9 @@ async function convertEntry(
 
   const entryOptions: ConverterOptions = {
     ...options,
-    file_extension: extension,
+    extension,
     url: undefined,
-    _parent_converters: converters
+    _converters: converters
   };
 
   for (const converter of converters) {

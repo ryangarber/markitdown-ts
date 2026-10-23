@@ -5,13 +5,13 @@ import {
   Element as XmlElement,
   Node as XmlNode
 } from "@xmldom/xmldom";
-import { toArrayBuffer } from "../bytes";
-import type { ConverterOptions, ConverterResult } from "../types";
-import { HtmlConverter } from "./html";
+import type { ConverterOptions, ConverterResult } from "../types.ts";
+import { toArrayBuffer } from "../utils/index.ts";
+import { HtmlConverter } from "./html.ts";
 
 export class PptxConverter extends HtmlConverter {
-  async convert(source: Uint8Array, options: ConverterOptions): Promise<ConverterResult> {
-    if (options.file_extension?.toLowerCase() !== ".pptx") {
+  override async convert(source: Uint8Array, options: ConverterOptions): Promise<ConverterResult> {
+    if (options.extension !== "pptx") {
       return null;
     }
 
@@ -28,8 +28,7 @@ export class PptxConverter extends HtmlConverter {
     const markdown = sections.join("\n\n");
     return {
       title: null,
-      markdown,
-      text_content: markdown
+      markdown
     };
   }
 }

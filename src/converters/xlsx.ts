@@ -1,11 +1,11 @@
 import readExcelFile, { type SheetData } from "read-excel-file/universal";
-import { toArrayBuffer } from "../bytes";
-import type { ConverterOptions, ConverterResult } from "../types";
-import { HtmlConverter } from "./html";
+import type { ConverterOptions, ConverterResult } from "../types.ts";
+import { toArrayBuffer } from "../utils/index.ts";
+import { HtmlConverter } from "./html.ts";
 
 export class XlsxConverter extends HtmlConverter {
-  async convert(source: Uint8Array, options: ConverterOptions): Promise<ConverterResult> {
-    if (options.file_extension?.toLowerCase() !== ".xlsx") {
+  override async convert(source: Uint8Array, options: ConverterOptions): Promise<ConverterResult> {
+    if (options.extension !== "xlsx") {
       return null;
     }
 
@@ -24,8 +24,7 @@ export class XlsxConverter extends HtmlConverter {
     const markdown = sections.join("\n\n");
     return {
       title: null,
-      markdown,
-      text_content: markdown
+      markdown
     };
   }
 }

@@ -1,3 +1,8 @@
-export type { ConversionSource } from "./markitdown";
-export { MarkItDown } from "./markitdown";
-export type { ByteSource, ConverterOptions, ConverterResult, DocumentConverter } from "./types";
+export { MarkItDown } from "./markitdown.ts";
+export type {
+  ByteSource,
+  Converter,
+  ConverterOptions,
+  ConverterResult,
+  ConverterSource
+} from "./types.ts";

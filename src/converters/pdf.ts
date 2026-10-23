@@ -1,9 +1,9 @@
 import { extractText, getDocumentProxy, getMeta } from "unpdf";
-import type { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
+import type { Converter, ConverterOptions, ConverterResult } from "../types.ts";
 
-export class PdfConverter implements DocumentConverter {
+export class PdfConverter implements Converter {
   async convert(source: Uint8Array, options: ConverterOptions): Promise<ConverterResult> {
-    if (options.file_extension?.toLowerCase() !== ".pdf") {
+    if (options.extension !== "pdf") {
       return null;
     }
 
@@ -15,7 +15,7 @@ export class PdfConverter implements DocumentConverter {
       ]);
       const title = typeof info.Title === "string" && info.Title.trim() ? info.Title : null;
 
-      return { title, markdown: text, text_content: text };
+      return { title, markdown: text };
     } finally {
       await pdf.loadingTask.destroy();
     }

@@ -1,4 +1,4 @@
-import type { ByteSource } from "./types";
+import type { ByteSource } from "../types.ts";
 
 export async function toUint8Array(source: ByteSource): Promise<Uint8Array> {
   if (source instanceof Uint8Array) {
@@ -26,13 +26,4 @@ export function decodeText(source: Uint8Array): string {
 
 export function isBlob(value: unknown): value is Blob {
   return typeof Blob !== "undefined" && value instanceof Blob;
-}
-
-export function normalizeExtension(extension: string): string {
-  if (!extension) {
-    return "";
-  }
-
-  const normalized = extension.toLowerCase();
-  return normalized.startsWith(".") ? normalized : `.${normalized}`;
 }

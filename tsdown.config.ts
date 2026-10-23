@@ -1,22 +1,22 @@
 import { defineConfig } from "tsdown";
 
-const libraryBuild = {
+const base = {
   entry: ["src/index.ts"],
   dts: true,
   sourcemap: true,
   treeshake: true,
-  target: "es2020",
-  platform: "neutral"
-} as const;
+  target: "es2020" as const,
+  platform: "neutral" as const
+};
 
 export default defineConfig([
   {
-    ...libraryBuild,
+    ...base,
     format: ["esm"],
     clean: true
   },
   {
-    ...libraryBuild,
+    ...base,
     format: ["cjs"],
     clean: false,
     deps: {

@@ -1,5 +1,5 @@
-import { decodeText } from "../bytes";
-import type { ConverterOptions, ConverterResult, DocumentConverter } from "../types";
+import type { Converter, ConverterOptions, ConverterResult } from "../types.ts";
+import { decodeText } from "../utils/index.ts";
 
 type NotebookCell = {
   cell_type?: string;
@@ -11,9 +11,9 @@ type Notebook = {
   metadata?: { title?: string };
 };
 
-export class IpynbConverter implements DocumentConverter {
+export class IpynbConverter implements Converter {
   async convert(source: Uint8Array, options: ConverterOptions = {}): Promise<ConverterResult> {
-    if (options.file_extension?.toLowerCase() !== ".ipynb") {
+    if (options.extension !== "ipynb") {
       return null;
     }
 
@@ -38,6 +38,6 @@ export class IpynbConverter implements DocumentConverter {
     }
 
     const markdown = output.join("\n\n");
-    return { title, markdown, text_content: markdown };
+    return { title, markdown };
   }
 }

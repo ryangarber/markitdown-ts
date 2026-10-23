@@ -49,15 +49,13 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsdown",
-    "check": "biome check . && tsc --noEmit",
-    "check:fix": "biome check --write .",
-    "format": "biome format --write .",
-    "lint": "biome lint .",
-    "prepublishOnly": "npm run check && npm test -- --run && npm run build",
-    "release": "bumpp --commit --push --tag && pnpm publish",
+    "cli": "node ./src/cli.ts",
+    "build": "tsdown && pnpm man",
+    "build:cli": "node ./scripts/build.ts",
+    "lint": "biome check --write .",
+    "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "typecheck": "tsc --noEmit"
+    "man": "node ./scripts/man.ts"
   },
   "bin": {
     "markitdown": "./dist/cli.mjs"
@@ -66,25 +64,44 @@
     "access": "public"
   },
   "dependencies": {
-    "@commander-js/extra-typings": "^15.0.0",
-    "@joplin/turndown-plugin-gfm": "^1.0.67",
-    "@jvmr/pptx-to-html": "^1.1.1",
-    "@xmldom/xmldom": "^0.9.11",
+    "@jvmr/pptx-to-html": "^1.1.2",
+    "@optique/core": "^1.3.6",
+    "@optique/man": "^1.3.6",
+    "@optique/run": "^1.3.6",
+    "@truto/turndown-plugin-gfm": "^1.0.5",
+    "@xmldom/xmldom": "^0.9.12",
     "fflate": "^0.8.3",
-    "linkedom": "^0.18.13",
-    "mammoth": "^1.12.1",
-    "read-excel-file": "^9.3.10",
+    "file-type": "^22.2.0",
+    "linkedom": "^0.18.14",
+    "mammoth": "^1.13.0",
+    "mime": "^4.1.1",
+    "read-excel-file": "^9.3.12",
     "turndown": "^7.2.4",
-    "unpdf": "^1.8.1"
+    "unpdf": "^1.9.1"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.9",
-    "@types/node": "^26.2.0",
+    "@biomejs/biome": "^2.6.2",
+    "@types/node": "^26.6.5",
     "@types/turndown": "^5.0.6",
-    "bumpp": "^12.2.1",
-    "tsdown": "^0.22.14",
+    "knip": "^6.42.1",
+    "tsdown": "^0.23.1",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.5"
   },
-  "packageManager": "pnpm@11.22.0+sha512.1ff870c4c6133dfd88fb2afc46dd13d47f09c9794b438c6fdb47ca98caf3bc16381ee0be93a091b8e3824cf01f889f46d7d9e20910fb0be1ab0fb5baa80dd621"
+  "packageManager": "pnpm@12.14.0+sha512.c18ba6d87993d3d164cb5e8948f32b2c06ee854487e06cd8d86781342fb3e5bb4634367034711e86802baa9c37bea906ce1929ad08d70884c97d801df13389a6",
+  "devEngines": {
+    "runtime": [
+      {
+        "name": "node",
+        "version": "26.12.1",
+        "onFail": "download"
+      },
+      {
+        "name": "bun",
+        "version": ">=1.4.0",
+        "onFail": "download"
+      }
+    ]
+  },
+  "man": "./dist/markitdown.1"
 }

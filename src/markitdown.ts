@@ -1,44 +1,33 @@
-import { isBlob, toUint8Array } from "./bytes";
-import { BingSerpConverter } from "./converters/bingserp";
-import { DocxConverter } from "./converters/docx";
-import { HtmlConverter } from "./converters/html";
-import { IpynbConverter } from "./converters/ipynb";
-import { PdfConverter } from "./converters/pdf";
-import { PlainTextConverter } from "./converters/plain-text";
-import { PptxConverter } from "./converters/pptx";
-import { WikipediaConverter } from "./converters/wikipedia";
-import { XlsxConverter } from "./converters/xlsx";
-import { RSSConverter } from "./converters/xml-rss-atom";
-import { YouTubeConverter } from "./converters/youtube";
-import { ZipConverter } from "./converters/zip";
-import { extensionFromMime, extensionFromPathname } from "./mime";
-import type { ByteSource, ConverterOptions, ConverterResult, DocumentConverter } from "./types";
-
-export type ConversionSource = ByteSource | Response | URL | string;
+import * as converters from "./converters/index.ts";
+import type { Converter, ConverterOptions, ConverterResult, ConverterSource } from "./types.ts";
+import { detectExtensions, filenameFromDisposition, isBlob, toUint8Array } from "./utils/index.ts";
 
 export class MarkItDown {
-  private readonly converters: DocumentConverter[] = [];
+  private readonly converters: Converter[] = [];
 
   constructor() {
-    this.registerConverter(new PlainTextConverter());
-    this.registerConverter(new HtmlConverter());
-    this.registerConverter(new ZipConverter());
-    this.registerConverter(new RSSConverter());
-    this.registerConverter(new WikipediaConverter());
-    this.registerConverter(new YouTubeConverter());
-    this.registerConverter(new BingSerpConverter());
-    this.registerConverter(new DocxConverter());
-    this.registerConverter(new XlsxConverter());
-    this.registerConverter(new PptxConverter());
-    this.registerConverter(new PdfConverter());
-    this.registerConverter(new IpynbConverter());
+    // Order matters: later registrations take precedence, so generic converters come first.
+    const ordered = [
+      converters.PlainTextConverter,
+      converters.HtmlConverter,
+      converters.ZipConverter,
+      converters.RSSConverter,
+      converters.WikipediaConverter,
+      converters.YouTubeConverter,
+      converters.BingSerpConverter,
+      converters.DocxConverter,
+      converters.XlsxConverter,
+      converters.PptxConverter,
+      converters.PdfConverter,
+      converters.IpynbConverter
+    ];
+    for (const converter of ordered) {
+      this.registerConverter(new converter());
+    }
   }
 
   /** Convert a URL, response, blob, array buffer, data view, or typed array. */
-  async convert(
-    source: ConversionSource,
-    options: ConverterOptions = {}
-  ): Promise<ConverterResult> {
+  async convert(source: ConverterSource, options: ConverterOptions = {}): Promise<ConverterResult> {
     if (typeof source === "string" || source instanceof URL) {
       return this.convertUrl(source.toString(), options);
     }
@@ -47,33 +36,15 @@ export class MarkItDown {
       return this.convertResponse(source, options);
     }
 
-    const extensions = new Set<string>();
-    this.addExtension(extensions, options.file_extension?.replace(/^\./, ""));
+    const bytes = await toUint8Array(source);
+    const extensions = await detectExtensions(bytes, {
+      extension: options.extension,
+      filename: isBlob(source) && "name" in source ? String(source.name) : null,
+      urls: [options.url],
+      contentType: isBlob(source) ? source.type : null
+    });
 
-    if (isBlob(source)) {
-      this.addExtension(extensions, extensionFromMime(source.type));
-      if ("name" in source && typeof source.name === "string") {
-        this.addExtension(extensions, extensionFromPathname(source.name));
-      }
-    }
-
-    if (extensions.size === 0) {
-      throw new Error(
-        "Could not determine the file type. Provide `file_extension` when converting bytes."
-      );
-    }
-
-    return this.convertBytes(await toUint8Array(source), extensions, options);
-  }
-
-  /**
-   * @deprecated Pass the byte source directly to `convert`.
-   */
-  async convertBuffer(
-    source: ByteSource,
-    options: ConverterOptions & { file_extension: string }
-  ): Promise<ConverterResult> {
-    return this.convert(source, options);
+    return this.convertBytes(bytes, extensions, options);
   }
 
   private async convertUrl(
@@ -100,38 +71,30 @@ export class MarkItDown {
     response: Response,
     options: ConverterOptions
   ): Promise<ConverterResult> {
-    const extensions = new Set<string>();
-    this.addExtension(extensions, options.file_extension);
-    this.addExtension(extensions, extensionFromMime(response.headers.get("content-type")));
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    // The requested URL may lack an extension that the redirected one has, or vice versa.
+    const extensions = await detectExtensions(bytes, {
+      extension: options.extension,
+      filename: filenameFromDisposition(response.headers.get("content-disposition")),
+      urls: [options.url, response.url],
+      contentType: response.headers.get("content-type")
+    });
 
-    const disposition = response.headers.get("content-disposition") ?? "";
-    const filename = disposition.match(/filename\*?=(?:UTF-8''|["']?)([^;"']+)/i)?.[1];
-    if (filename) {
-      this.addExtension(extensions, extensionFromPathname(decodeURIComponent(filename.trim())));
-    }
-
-    const responseUrl = options.url || response.url;
-    if (responseUrl) {
-      this.addExtension(extensions, extensionFromPathname(new URL(responseUrl).pathname));
-    }
-
-    if (extensions.size === 0) {
-      throw new Error(
-        "Could not determine the file type. Provide `file_extension` or a Content-Type header."
-      );
-    }
-
-    return this.convertBytes(new Uint8Array(await response.arrayBuffer()), extensions, {
+    return this.convertBytes(bytes, extensions, {
       ...options,
-      url: responseUrl
+      url: options.url || response.url || undefined
     });
   }
 
   private async convertBytes(
     source: Uint8Array,
-    extensions: Set<string>,
+    extensions: string[],
     options: ConverterOptions
   ): Promise<ConverterResult> {
+    if (extensions.length === 0) {
+      throw new Error("Could not determine the file type. Provide `extension` for better results.");
+    }
+
     let lastError: unknown;
 
     for (const extension of extensions) {
@@ -139,15 +102,14 @@ export class MarkItDown {
         try {
           const result = await converter.convert(source, {
             ...options,
-            file_extension: extension,
-            _parent_converters: this.converters
+            extension,
+            _converters: this.converters
           });
           if (result) {
             result.markdown = result.markdown
               .replace(/\r\n|\r|\n/g, "\n")
               .trim()
               .replace(/\n{3,}/g, "\n\n");
-            result.text_content = result.markdown;
             return result;
           }
         } catch (error) {
@@ -159,23 +121,16 @@ export class MarkItDown {
       }
     }
 
-    const formats = [...extensions].join(", ");
+    const formats = extensions.join(", ");
+
     if (lastError) {
       throw new Error(`Could not convert ${formats} to Markdown: ${String(lastError)}`);
     }
+
     throw new Error(`Unsupported file type: ${formats}.`);
   }
 
-  private addExtension(extensions: Set<string>, extension: string | null | undefined): void {
-    if (!extension) {
-      return;
-    }
-    extensions.add(
-      extension.startsWith(".") ? extension.toLowerCase() : `.${extension.toLowerCase()}`
-    );
-  }
-
-  private registerConverter(converter: DocumentConverter): void {
+  private registerConverter(converter: Converter): void {
     this.converters.unshift(converter);
   }
 }

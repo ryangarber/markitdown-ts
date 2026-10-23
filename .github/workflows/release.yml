@@ -1,0 +1,87 @@
+name: release
+
+on:
+  # A push runs the whole release as a dry run: everything is built, and
+  # nothing is published. Only a dispatch from main releases.
+  workflow_run:
+    workflows:
+      - check
+    types:
+      - completed
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+concurrency:
+  # Under workflow_run, github.ref is always the default branch.
+  group: release-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # npm trusted publishing (OIDC) and provenance.
+      id-token: write
+    env:
+      DRY_RUN: ${{ github.event_name != 'workflow_dispatch' || github.ref_name != 'main' }}
+    outputs:
+      # A dry run goes through every time, so each push tests the build; with
+      # nothing to release, it builds the current version.
+      released: ${{ env.DRY_RUN == 'true' || steps.rylease.outputs.released }}
+      version: ${{ steps.rylease.outputs.version || steps.rylease.outputs.previous-version }}
+      notes: ${{ steps.rylease.outputs.notes }}
+      dry_run: ${{ env.DRY_RUN }}
+      # What the release builds: its tag, or in a dry run (which tags nothing)
+      # the commit.
+      ref: ${{ env.DRY_RUN == 'true' && (github.event.workflow_run.head_sha || github.sha) || format('v{0}', steps.rylease.outputs.version) }}
+
+    steps:
+      # A dispatch checks out the branch itself, so the release commit can be
+      # pushed to it.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+          fetch-depth: 0
+
+      - name: Install dependencies
+        uses: pnpm/setup@v3
+        with:
+          cache: true
+
+      - name: Build
+        run: pnpm build
+
+      - name: Release
+        id: rylease
+        uses: ryangarber/rylease@v3
+        with:
+          dry-run: ${{ env.DRY_RUN }}
+          history: "[git/tags, { uses: fs/version-file, with: { format: npm } }]"
+          steps: |
+            - uses: conventional
+            - uses: fs/write-version
+              with: { format: npm }
+            - uses: fs/write-changes
+            - uses: git/commit
+            - uses: npm/publish
+              with:
+                provenance: true
+
+  cli:
+    needs: version
+    if: needs.version.outputs.released == 'true'
+    uses: ./.github/workflows/release-cli.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      notes: ${{ needs.version.outputs.notes }}
+      ref: ${{ needs.version.outputs.ref }}
+      dry_run: ${{ needs.version.outputs.dry_run == 'true' }}
+    secrets: inherit

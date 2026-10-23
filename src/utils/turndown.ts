@@ -1,10 +1,10 @@
-import turndownPluginGfm from "@joplin/turndown-plugin-gfm";
+import TurndownPluginGfm from "@truto/turndown-plugin-gfm";
 import TurndownService from "turndown";
 
-export class CustomTurnDown {
+export class Turndown {
   convertSoup(document: string | Node): string {
     const service = new TurndownService({ headingStyle: "atx" });
-    service.use(turndownPluginGfm.gfm);
+    service.use(TurndownPluginGfm);
 
     service.addRule("anchor tags", {
       filter: ["a"],
@@ -59,6 +59,32 @@ export class CustomTurnDown {
       }
     });
 
-    return service.turndown(document as TurndownService.Node);
+    return service.turndown(serializeNode(document));
   }
+}
+
+/**
+ * Turndown and its GFM plugin rely on DOM APIs (e.g. `HTMLTableElement.rows`, `Element.closest`)
+ * that linkedom does not implement, which silently drops content such as tables. Serializing
+ * lets Turndown re-parse the markup with its own spec-compliant DOM.
+ */
+function serializeNode(node: string | Node): string {
+  if (typeof node === "string") {
+    return node;
+  }
+  if (node.nodeType === node.DOCUMENT_NODE) {
+    return (node as Document).documentElement?.outerHTML ?? "";
+  }
+  if (node.nodeType === node.ELEMENT_NODE) {
+    return (node as Element).outerHTML;
+  }
+  if (node.nodeType === node.TEXT_NODE) {
+    return escapeHtml(node.textContent ?? "");
+  }
+  // Document fragments and other containers.
+  return [...node.childNodes].map(serializeNode).join("");
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

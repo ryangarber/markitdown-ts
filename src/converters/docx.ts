@@ -1,11 +1,18 @@
 import mammoth from "mammoth";
-import { toArrayBuffer } from "../bytes";
-import type { ConverterOptions, ConverterResult } from "../types";
-import { HtmlConverter } from "./html";
+import type { ConverterOptions, ConverterResult } from "../types.ts";
+import { toArrayBuffer } from "../utils/index.ts";
+import { HtmlConverter } from "./html.ts";
 
-export class DocxConverter extends HtmlConverter {
-  async convert(source: Uint8Array, options: ConverterOptions): Promise<ConverterResult> {
-    if (options.file_extension?.toLowerCase() !== ".docx") {
+export interface MammothOptions {
+  mammoth?: NonNullable<Parameters<typeof mammoth.convertToHtml>[1]>;
+}
+
+export class DocxConverter extends HtmlConverter<MammothOptions> {
+  override async convert(
+    source: Uint8Array,
+    options: ConverterOptions<MammothOptions>
+  ): Promise<ConverterResult> {
+    if (options.extension !== "docx") {
       return null;
     }
 
@@ -21,17 +28,11 @@ export class DocxConverter extends HtmlConverter {
       mammothInput = { buffer: Buffer.from(source) };
     }
 
-    const mammothOptions: Parameters<typeof mammoth.convertToHtml>[1] = {
-      styleMap: options.styleMap,
-      includeEmbeddedStyleMap: options.includeEmbeddedStyleMap,
-      includeDefaultStyleMap: options.includeDefaultStyleMap,
-      ignoreEmptyParagraphs: options.ignoreEmptyParagraphs,
-      idPrefix: options.idPrefix
-    };
-
-    if (options.transformDocument) {
-      mammothOptions.transformDocument = options.transformDocument;
-    }
+    const mammothOptions: NonNullable<MammothOptions["mammoth"]> = Object.fromEntries(
+      Object.entries(options.mammoth ?? {}).flatMap(([key, value]) =>
+        value !== undefined ? [[key, value]] : []
+      )
+    );
 
     const html = await mammoth.convertToHtml(mammothInput, mammothOptions);
 
