@@ -1,3 +1,9 @@
+## v0.2.2 (2026-11-08)
+
+### Bug Fixes
+
+- docx extraction can fail in browser ([25a5d9d](https://github.com/ryangarber/markitdown-ts/commit/25a5d9d61c47bea31f72f2f7bbbca69deb33696b))
+
 ## v0.2.1 (2026-10-23)
 
 ### Bug Fixes
