@@ -20,11 +20,7 @@ export class DocxConverter extends HtmlConverter<MammothOptions> {
       arrayBuffer: toArrayBuffer(source)
     };
 
-    if (
-      typeof process !== "undefined" &&
-      process.versions !== null &&
-      process.versions.node !== null
-    ) {
+    if (typeof process !== "undefined" && process.versions && process.versions.node) {
       mammothInput = { buffer: Buffer.from(source) };
     }
 
